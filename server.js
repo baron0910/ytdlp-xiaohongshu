@@ -69,7 +69,6 @@ app.post('/download', authenticate, async (req, res) => {
     
     // 3. 轉換為 base64 (非同步)
     console.log(`[${jobId}] 步驟 3: 轉換為 base64...`);
-    // 注意：這裡使用 ffmpeg 將音訊轉為 wav 再 base64
     const ffmpegCmd = `ffmpeg -v error -i "${tempFile}" -vn -ac 1 -ar 16000 -acodec pcm_s16le -f wav - 2>/dev/null | base64 | tr -d '\\n\\r '`;
     const { stdout: base64Audio } = await execPromise(ffmpegCmd, { 
       timeout: 120000,
@@ -108,13 +107,13 @@ app.post('/download', authenticate, async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     service: 'ytdlp-xiaohongshu',
-    version: '1.3.0',
+    version: '1.3.1',
     authEnabled: !!API_KEY,
     github: 'https://github.com/baron0910/ytdlp-xiaohongshu'
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ytdlp-xiaohongshu 服務運行在端口 ${PORT}`);
   if (API_KEY) console.log('API Key 驗證已啟用');

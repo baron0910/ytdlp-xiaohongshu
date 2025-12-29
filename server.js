@@ -11,18 +11,19 @@ const API_KEY = process.env.API_KEY;
 // API Key 驗證中間件
 const authenticate = (req, res, next) => {
   if (API_KEY) {
-    const userKey = req.headers['x-api-key'];
+    // 改為讀取 Authorization Header
+    const userKey = req.headers['authorization'];
     if (!userKey || userKey !== API_KEY) {
       return res.status(401).json({ 
         success: false, 
-        error: 'Unauthorized: Invalid or missing API Key' 
+        error: 'Unauthorized: Invalid or missing API Key in Authorization header' 
       });
     }
   }
   next();
 };
 
-// 健康檢查 (不需要 API Key)
+// 健康檢查
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok',
@@ -32,7 +33,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 下載並轉換端點 (需要 API Key 驗證)
+// 下載並轉換端點
 app.post('/download', authenticate, async (req, res) => {
   const { mediaUrl } = req.body;
   
@@ -52,7 +53,7 @@ app.post('/download', authenticate, async (req, res) => {
     console.log('步驟 1: 下載影片...');
     execSync(`yt-dlp -f "bestaudio/worst" --no-playlist --no-continue --no-cache-dir --socket-timeout 180 --retries 3 --fragment-retries 3 --user-agent "Xiaohongshu/8.99.1 (iPhone; iOS 16.0; Scale/3.00)" --add-header "Referer: https://www.xiaohongshu.com/" -o "${tempFile}" "${mediaUrl}"`, {
       stdio: 'inherit',
-      timeout: 300000 // 5 分鐘超時
+      timeout: 300000 
     });
     
     if (!fs.existsSync(tempFile)) {
@@ -70,7 +71,7 @@ app.post('/download', authenticate, async (req, res) => {
     console.log('步驟 3: 轉換為 base64...');
     const base64Audio = execSync(`ffmpeg -v error -i "${tempFile}" -vn -ac 1 -ar 16000 -acodec pcm_s16le -f wav - 2>/dev/null | base64 | tr -d '\\n\\r '`, {
       encoding: 'utf-8',
-      timeout: 120000 // 2 分鐘超時
+      timeout: 120000 
     });
     
     // 清理
@@ -86,17 +87,12 @@ app.post('/download', authenticate, async (req, res) => {
       audioBase64: base64Audio
     });
   } catch (error) {
-    // 清理
     if (fs.existsSync(tempFile)) {
       try {
         fs.unlinkSync(tempFile);
-      } catch (e) {
-        // 忽略清理錯誤
-      }
+      } catch (e) {}
     }
-    
     console.error('處理失敗:', error.message);
-    
     res.status(500).json({
       success: false,
       error: error.message
@@ -108,11 +104,11 @@ app.post('/download', authenticate, async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     service: 'ytdlp-xiaohongshu',
-    version: '1.1.0',
+    version: '1.2.0',
     authEnabled: !!API_KEY,
     endpoints: {
       'GET /health': '健康檢查',
-      'POST /download': '下載並轉換小紅書影片 (需 X-API-KEY Header)',
+      'POST /download': '下載並轉換小紅書影片 (需 Authorization Header)',
       'GET /': '服務資訊'
     }
   });
@@ -121,5 +117,5 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ytdlp-xiaohongshu 服務運行在端口 ${PORT}`);
-  if (API_KEY) console.log('API Key 驗證已啟用');
+  if (API_KEY) console.log('API Key 驗證已啟用 (使用 Authorization Header)');
 });

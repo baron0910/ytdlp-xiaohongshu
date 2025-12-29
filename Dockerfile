@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 下載最新版的 yt-dlp 並設置執行權限
-# 這取代了原本的 pip3 install，能避開系統環境限制
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
@@ -20,7 +19,9 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
 COPY package*.json ./
 
 # 安裝 Node.js 依賴
-RUN npm ci --only=production
+# 因為專案中沒有 package-lock.json，所以改用 npm install
+# 並使用 --omit=dev 取代已過時的 --only=production
+RUN npm install --omit=dev
 
 # 複製應用程式文件
 COPY server.js ./

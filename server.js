@@ -53,9 +53,26 @@ app.post('/download', authenticate, async (req, res) => {
   try {
     console.log(`[${jobId}] 開始處理: ${mediaUrl}`);
     
-    // 1. 下載影片 (非同步)
+    // 1. 優化過的 yt-dlp 指令
     console.log(`[${jobId}] 步驟 1: 下載影片...`);
-    const ytDlpCmd = `yt-dlp -f "bestaudio/worst" --no-playlist --no-continue --no-cache-dir --socket-timeout 60 --retries 3 --fragment-retries 3 --user-agent "Xiaohongshu/8.99.1 (iPhone; iOS 16.0; Scale/3.00)" --add-header "Referer: https://www.xiaohongshu.com/" -o "${tempFile}" "${mediaUrl}"`;
+    const ytDlpCmd = [
+      'yt-dlp',
+      '-f "bestaudio/worst"',
+      '--no-playlist',
+      '--no-continue',
+      '--no-cache-dir',
+      '--socket-timeout 120',      // 增加到 120 秒
+      '--retries 5',               // 增加重試次數
+      '--fragment-retries 5',
+      '--no-check-certificates',   // 忽略證書錯誤
+      '--user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"',
+      '--add-header "Referer:https://www.xiaohongshu.com/"',
+      '--add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"',
+      `-o "${tempFile}"`,
+      `"${mediaUrl}"`
+    ].join(' ');
+    
+    console.log(`[${jobId}] 執行指令: ${ytDlpCmd}`);
     
     await execPromise(ytDlpCmd, { timeout: 300000 });
     
@@ -63,16 +80,16 @@ app.post('/download', authenticate, async (req, res) => {
       throw new Error('下載失敗：檔案未能在預期路徑生成');
     }
     
-    // 2. 獲取時長 (非同步)
+    // 2. 獲取時長
     console.log(`[${jobId}] 步驟 2: 獲取時長...`);
-    const { stdout: duration } = await execPromise(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tempFile}"`, { timeout: 10000 });
+    const { stdout: duration } = await execPromise(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tempFile}"`, { timeout: 15000 });
     
-    // 3. 轉換為 base64 (非同步)
+    // 3. 轉換為 base64
     console.log(`[${jobId}] 步驟 3: 轉換為 base64...`);
     const ffmpegCmd = `ffmpeg -v error -i "${tempFile}" -vn -ac 1 -ar 16000 -acodec pcm_s16le -f wav - 2>/dev/null | base64 | tr -d '\\n\\r '`;
     const { stdout: base64Audio } = await execPromise(ffmpegCmd, { 
-      timeout: 120000,
-      maxBuffer: 50 * 1024 * 1024 // 允許最大 50MB 的輸出
+      timeout: 180000,
+      maxBuffer: 100 * 1024 * 1024 // 增加到 100MB 緩衝區
     });
     
     // 清理
@@ -85,7 +102,7 @@ app.post('/download', authenticate, async (req, res) => {
     res.json({
       success: true,
       jobId: jobId,
-      duration: parseFloat(duration.trim()),
+      duration: parseFloat(duration.trim() || 0),
       audioBase64: base64Audio.trim()
     });
   } catch (error) {
@@ -95,26 +112,29 @@ app.post('/download', authenticate, async (req, res) => {
       try { fs.unlinkSync(tempFile); } catch (e) {}
     }
     
+    // 判斷是否為超時錯誤，給予更友善的提示
+    let friendlyError = error.message;
+    if (error.message.includes('timed out')) {
+      friendlyError = '小紅書伺服器回應超時，請稍後再試，或嘗試提供完整的 explore 連結而非短網址。';
+    }
+    
     res.status(500).json({
       success: false,
       jobId: jobId,
-      error: error.message
+      error: friendlyError
     });
   }
 });
 
-// 根路徑
 app.get('/', (req, res) => {
   res.json({
     service: 'ytdlp-xiaohongshu',
-    version: '1.3.1',
-    authEnabled: !!API_KEY,
-    github: 'https://github.com/baron0910/ytdlp-xiaohongshu'
+    version: '1.4.0',
+    authEnabled: !!API_KEY
   });
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`ytdlp-xiaohongshu 服務運行在端口 ${PORT}`);
-  if (API_KEY) console.log('API Key 驗證已啟用');
+  console.log(`ytdlp-xiaohongshu 運行於 ${PORT}`);
 });

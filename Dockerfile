@@ -19,8 +19,6 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
 COPY package*.json ./
 
 # 安裝 Node.js 依賴
-# 因為專案中沒有 package-lock.json，所以改用 npm install
-# 並使用 --omit=dev 取代已過時的 --only=production
 RUN npm install --omit=dev
 
 # 複製應用程式文件
@@ -29,8 +27,8 @@ COPY server.js ./
 # 設置環境變數
 ENV NODE_ENV=production
 
-# 暴露端口
-EXPOSE 3000
+# 暴露端口 (已改為 8080)
+EXPOSE 8080
 
 # 設置非 root 用戶（安全最佳實踐）
 RUN groupadd -r appuser && useradd -r -g appuser appuser \
@@ -38,9 +36,9 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser \
 
 USER appuser
 
-# 健康檢查
+# 健康檢查 (已改為 8080)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # 啟動服務
 CMD ["node", "server.js"]

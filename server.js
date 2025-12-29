@@ -6,17 +6,34 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
-// 健康檢查
+const API_KEY = process.env.API_KEY;
+
+// API Key 驗證中間件
+const authenticate = (req, res, next) => {
+  if (API_KEY) {
+    const userKey = req.headers['x-api-key'];
+    if (!userKey || userKey !== API_KEY) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Unauthorized: Invalid or missing API Key' 
+      });
+    }
+  }
+  next();
+};
+
+// 健康檢查 (不需要 API Key)
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok',
     service: 'ytdlp-xiaohongshu',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    authEnabled: !!API_KEY
   });
 });
 
-// 下載並轉換端點
-app.post('/download', async (req, res) => {
+// 下載並轉換端點 (需要 API Key 驗證)
+app.post('/download', authenticate, async (req, res) => {
   const { mediaUrl } = req.body;
   
   if (!mediaUrl) {
@@ -51,7 +68,7 @@ app.post('/download', async (req, res) => {
     
     // 3. 轉換為 base64
     console.log('步驟 3: 轉換為 base64...');
-    const base64Audio = execSync(`ffmpeg -v error -i "${tempFile}" -vn -ac 1 -ar 16000 -acodec pcm_s16le -f wav - 2>/dev/null | base64 | tr -d '\n\r '`, {
+    const base64Audio = execSync(`ffmpeg -v error -i "${tempFile}" -vn -ac 1 -ar 16000 -acodec pcm_s16le -f wav - 2>/dev/null | base64 | tr -d '\\n\\r '`, {
       encoding: 'utf-8',
       timeout: 120000 // 2 分鐘超時
     });
@@ -91,10 +108,11 @@ app.post('/download', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     service: 'ytdlp-xiaohongshu',
-    version: '1.0.0',
+    version: '1.1.0',
+    authEnabled: !!API_KEY,
     endpoints: {
       'GET /health': '健康檢查',
-      'POST /download': '下載並轉換小紅書影片',
+      'POST /download': '下載並轉換小紅書影片 (需 X-API-KEY Header)',
       'GET /': '服務資訊'
     }
   });
@@ -103,7 +121,5 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ytdlp-xiaohongshu 服務運行在端口 ${PORT}`);
-  console.log(`健康檢查: http://localhost:${PORT}/health`);
+  if (API_KEY) console.log('API Key 驗證已啟用');
 });
-
-

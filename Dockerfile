@@ -1,21 +1,22 @@
-# 使用官方 Node.js 映像檔
-FROM node:24-slim
+# 使用官方 Node.js 映像檔 (建議使用 22-slim 以確保穩定性)
+FROM node:22-slim
 
 # 設置工作目錄
 WORKDIR /app
 
-# 安裝系統依賴（ffmpeg 和 yt-dlp 需要）
+# 安裝系統依賴（ffmpeg 需要，python3 是執行 yt-dlp 必要環境）
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
-    python3-pip \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 安裝 yt-dlp
-RUN pip3 install --no-cache-dir yt-dlp
+# 下載最新版的 yt-dlp 並設置執行權限
+# 這取代了原本的 pip3 install，能避開系統環境限制
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
-# 複製 package.json 和 package-lock.json（如果存在）
+# 複製 package.json 和 package-lock.json
 COPY package*.json ./
 
 # 安裝 Node.js 依賴
@@ -42,5 +43,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # 啟動服務
 CMD ["node", "server.js"]
-
-
